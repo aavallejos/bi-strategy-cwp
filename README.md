@@ -2,6 +2,10 @@
 
 Proyecto de estrategia de Business Intelligence para CWP.
 
+## Estado del Proyecto
+
+🚀 En desarrollo activo
+
 ## Descripción
 
 Este repositorio contiene herramientas y aplicaciones para análisis de datos y estrategias de BI.
