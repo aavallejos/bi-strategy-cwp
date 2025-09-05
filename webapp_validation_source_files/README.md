@@ -137,4 +137,27 @@ amplify publish
 
 ---
 
+## 📅 Roadmap de Implementación
+
+### Cronograma Ejecutivo
+- **Duración Total**: 28 semanas (14 sprints de 2 semanas)
+- **Equipo**: PO, Solution Architect, AWS Developer, Data Engineer
+- **Metodología**: Scrum con sprints de 2 semanas
+
+### Archivos de Planificación
+- 📊 `docs/HeadCount_Validation_Roadmap.csv` - Roadmap detallado por sprint
+- 👥 `docs/Team_Allocation_Roadmap.csv` - Asignación de roles por sprint
+- 📋 `docs/Roadmap_Executive_Summary.md` - Resumen ejecutivo completo
+- 🐍 `scripts/generate_roadmap_excel.py` - Generador de Excel con formato
+
+### Fases Principales
+1. **Fundación** (Sprints 0-1): Infraestructura y arquitectura
+2. **Validaciones Core** (Sprints 2-3): Motor de validación F1-F6
+3. **Experiencia Usuario** (Sprints 4-6): WebSocket, seguridad, templates
+4. **Operaciones** (Sprints 7-10): Frontend, monitoreo, alertas
+5. **Integración** (Sprints 11-12): SDLF y documentación
+6. **Go-Live** (Sprints 13-14): UAT, producción, hypercare
+
+---
+
 **Contacto**: Para más información sobre la implementación de esta solución, contactar a Strata Analytics - Cloud Solutions Team del equipo de BI Strategy CWP. - Timestamp: 2024-12-19 15:30:00
