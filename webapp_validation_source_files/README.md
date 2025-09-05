@@ -23,16 +23,31 @@ webapp_validation_source_files/
 
 ### Pipeline Principal
 ```
-Usuario → Okta SSO → Amplify App → S3 (raw) → Lambda → S3 (processed) → Glue Catalog
+Usuario → Okta SSO → Amplify App → Validación → S3 Raw Bucket (SDLF existente)
 ```
+
+### ⚠️ Scope del Proyecto
+**INCLUYE**:
+- Sistema completo de validación de archivos HeadCount
+- Autenticación SSO con Okta
+- Validaciones F1-F12 según requerimientos
+- Interfaz web para carga y validación
+- Publicación de archivos validados al bucket S3 raw existente
+
+**NO INCLUYE**:
+- Desarrollo o modificación de SDLF (Serverless Data Lake Framework)
+- Data pipelines o procesamiento posterior
+- Catalogación en Glue (manejado por SDLF existente)
+- Transformaciones de datos (responsabilidad de SDLF)
 
 ### Servicios AWS Utilizados
 - **AWS Amplify** - Frontend web con autenticación
 - **Amazon Cognito** - Federación SSO con Okta
-- **Amazon S3** - Almacenamiento (raw, processed, rejected)
+- **Amazon S3** - Almacenamiento (templates, rejected) + entrega a raw bucket SDLF
 - **AWS Lambda** - Procesamiento y validación
-- **Amazon EventBridge** - Orquestación de eventos
-- **AWS Glue** - Catalogación automática
+- **AWS Step Functions** - Orquestación de validaciones
+- **Amazon API Gateway** - WebSocket para progreso en tiempo real
+- **Amazon DynamoDB** - Configuración de esquemas y auditoría
 - **Amazon CloudWatch** - Monitoreo y logs
 
 ## 🚀 Características Principales
@@ -41,8 +56,9 @@ Usuario → Okta SSO → Amplify App → S3 (raw) → Lambda → S3 (processed) 
 - Carga de archivos Excel (.xlsx, .xls)
 - Conversión automática a CSV
 - Validaciones de calidad de datos
-- Catalogación automática en Glue
+- Entrega a SDLF bucket raw existente
 - Manejo de errores y archivos rechazados
+- **Punto final**: Archivos validados en S3 raw bucket para SDLF
 
 ### 🔐 Seguridad y Autenticación
 - SSO integrado con Okta
@@ -155,7 +171,7 @@ amplify publish
 2. **Validaciones Core** (Sprints 2-3): Motor de validación F1-F6
 3. **Experiencia Usuario** (Sprints 4-6): WebSocket, seguridad, templates
 4. **Operaciones** (Sprints 7-10): Frontend, monitoreo, alertas
-5. **Integración** (Sprints 11-12): SDLF y documentación
+5. **Integración** (Sprints 11-12): Entrega a SDLF y documentación
 6. **Go-Live** (Sprints 13-14): UAT, producción, hypercare
 
 ---
