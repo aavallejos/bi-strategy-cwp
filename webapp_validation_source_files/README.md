@@ -156,23 +156,25 @@ amplify publish
 ## 📅 Roadmap de Implementación
 
 ### Cronograma Ejecutivo
-- **Duración Total**: 28 semanas (14 sprints de 2 semanas)
+- **Duración Total**: 16 semanas (8 sprints de 2 semanas)
 - **Equipo**: PO, Solution Architect, AWS Developer, Data Engineer
 - **Metodología**: Scrum con sprints de 2 semanas
 
 ### Archivos de Planificación
-- 📊 `docs/HeadCount_Validation_Roadmap.csv` - Roadmap detallado por sprint
-- 👥 `docs/Team_Allocation_Roadmap.csv` - Asignación de roles por sprint
+- 📊 `docs/HeadCount_Validation_Roadmap_Optimized.csv` - Roadmap optimizado 8 sprints
+- 👥 `docs/Team_Allocation_Roadmap_Optimized.csv` - Asignación roles optimizada
 - 📋 `docs/Roadmap_Executive_Summary.md` - Resumen ejecutivo completo
 - 🐍 `scripts/generate_roadmap_excel.py` - Generador de Excel con formato
 
-### Fases Principales
-1. **Fundación** (Sprints 0-1): Infraestructura y arquitectura
-2. **Validaciones Core** (Sprints 2-3): Motor de validación F1-F6
-3. **Experiencia Usuario** (Sprints 4-6): WebSocket, seguridad, templates
-4. **Operaciones** (Sprints 7-10): Frontend, monitoreo, alertas
-5. **Integración** (Sprints 11-12): Entrega a SDLF y documentación
-6. **Go-Live** (Sprints 13-14): UAT, producción, hypercare
+### Fases Principales (Optimizadas)
+1. **Sprint 1**: Infraestructura + Validaciones Básicas (F1-F3)
+2. **Sprint 2**: Validaciones Avanzadas + Seguridad (F4-F8)
+3. **Sprint 3**: Error Reporting + WebSocket (F7,F10,F11)
+4. **Sprint 4**: Templates + Upload Seguro (F9,F12)
+5. **Sprint 5**: Frontend Development + Integración
+6. **Sprint 6**: Testing + Monitoreo
+7. **Sprint 7**: SDLF Integration + Documentación
+8. **Sprint 8**: UAT + Producción + Go-Live
 
 ---
 
