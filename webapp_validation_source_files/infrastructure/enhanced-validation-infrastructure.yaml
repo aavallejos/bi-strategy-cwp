@@ -1,0 +1,409 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Enhanced HeadCount File Validation System with Step Functions and WebSocket'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: 'hc-validation'
+  Environment:
+    Type: String
+    Default: 'prod'
+    AllowedValues: [dev, staging, prod]
+  MaxFileSizeMB:
+    Type: Number
+    Default: 50
+    Description: 'Maximum file size in MB'
+
+Resources:
+  # DynamoDB Tables
+  ValidationSchemasTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-validation-schemas'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: hc_type
+          AttributeType: S
+        - AttributeName: version
+          AttributeType: S
+      KeySchema:
+        - AttributeName: hc_type
+          KeyType: HASH
+        - AttributeName: version
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  AuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-audit-log'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: partner_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: partner_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # API Gateway WebSocket
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${ProjectName}-websocket'
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WebSocketApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+
+  # Step Functions State Machine
+  ValidationStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${ProjectName}-validation-workflow'
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "HeadCount File Validation Workflow",
+          "StartAt": "InitializeValidation",
+          "States": {
+            "InitializeValidation": {
+              "Type": "Task",
+              "Resource": "${InitializeValidationFunction.Arn}",
+              "Next": "FileNameValidation",
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "ValidationFailed"
+              }]
+            },
+            "FileNameValidation": {
+              "Type": "Task",
+              "Resource": "${FileNameValidationFunction.Arn}",
+              "Next": "FileSizeValidation",
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "ValidationFailed"
+              }]
+            },
+            "FileSizeValidation": {
+              "Type": "Task",
+              "Resource": "${FileSizeValidationFunction.Arn}",
+              "Next": "StructureValidation",
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "ValidationFailed"
+              }]
+            },
+            "StructureValidation": {
+              "Type": "Task",
+              "Resource": "${StructureValidationFunction.Arn}",
+              "Next": "DataValidation",
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "ValidationFailed"
+              }]
+            },
+            "DataValidation": {
+              "Type": "Task",
+              "Resource": "${DataValidationFunction.Arn}",
+              "Next": "BusinessRulesValidation",
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "ValidationFailed"
+              }]
+            },
+            "BusinessRulesValidation": {
+              "Type": "Task",
+              "Resource": "${BusinessRulesValidationFunction.Arn}",
+              "Next": "GeneratePresignedURL",
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "ValidationFailed"
+              }]
+            },
+            "GeneratePresignedURL": {
+              "Type": "Task",
+              "Resource": "${GeneratePresignedURLFunction.Arn}",
+              "Next": "ValidationSucceeded"
+            },
+            "ValidationSucceeded": {
+              "Type": "Succeed"
+            },
+            "ValidationFailed": {
+              "Type": "Task",
+              "Resource": "${GenerateErrorReportFunction.Arn}",
+              "End": true
+            }
+          }
+        }
+
+  # Lambda Functions
+  InitializeValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-initialize-validation'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt ValidationLambdaRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          SCHEMAS_TABLE: !Ref ValidationSchemasTable
+          AUDIT_TABLE: !Ref AuditTable
+          WEBSOCKET_ENDPOINT: !Sub 'https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          
+          def lambda_handler(event, context):
+              # Initialize validation process
+              partner_id = event.get('partner_id')
+              file_info = event.get('file_info')
+              
+              # Send WebSocket update
+              send_progress_update(partner_id, 'STARTED', 'Validation process initiated')
+              
+              return {
+                  'statusCode': 200,
+                  'partner_id': partner_id,
+                  'file_info': file_info,
+                  'validation_id': context.aws_request_id,
+                  'timestamp': datetime.now().isoformat()
+              }
+          
+          def send_progress_update(partner_id, status, message):
+              # WebSocket progress update implementation
+              pass
+
+  FileNameValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-filename-validation'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt ValidationLambdaRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          SCHEMAS_TABLE: !Ref ValidationSchemasTable
+      Code:
+        ZipFile: |
+          import json
+          import re
+          import boto3
+          
+          def lambda_handler(event, context):
+              filename = event['file_info']['filename']
+              hc_type = event['file_info']['hc_type']
+              
+              # F-1: Validate filename pattern
+              patterns = {
+                  'Contractors': r'^HC_Contratistas_[A-Za-z0-9]+_\d{6}\.xlsx$',
+                  'Stores': r'^HC_Tiendas_\d{6}\.xlsx$',
+                  'D2D': r'^HC_D2D_\d{6}\.xlsx$'
+              }
+              
+              if not re.match(patterns.get(hc_type, ''), filename):
+                  raise Exception(f'Invalid filename pattern for {hc_type}')
+              
+              return {
+                  **event,
+                  'validations': {
+                      'filename': {'status': 'PASSED', 'message': 'Filename validation successful'}
+                  }
+              }
+
+  FileSizeValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-filesize-validation'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt ValidationLambdaRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          MAX_FILE_SIZE_MB: !Ref MaxFileSizeMB
+      Code:
+        ZipFile: |
+          import json
+          import os
+          
+          def lambda_handler(event, context):
+              file_size_mb = event['file_info']['size_mb']
+              max_size = int(os.environ['MAX_FILE_SIZE_MB'])
+              
+              # F-2: Validate file size
+              if file_size_mb > max_size:
+                  raise Exception(f'File size {file_size_mb}MB exceeds maximum {max_size}MB')
+              
+              return {
+                  **event,
+                  'validations': {
+                      **event.get('validations', {}),
+                      'filesize': {'status': 'PASSED', 'message': f'File size {file_size_mb}MB is valid'}
+                  }
+              }
+
+  # S3 Buckets
+  ExchangeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-s3-exchange-${Environment}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt SDLFTriggerFunction.Arn
+
+  TemplatesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-templates-${Environment}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${ProjectName} CDN'
+        DefaultCacheBehavior:
+          TargetOriginId: AmplifyOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+        Origins:
+          - Id: AmplifyOrigin
+            DomainName: !Sub '${ProjectName}.amplifyapp.com'
+            CustomOriginConfig:
+              HTTPPort: 443
+              OriginProtocolPolicy: https-only
+
+  # IAM Roles
+  ValidationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ValidationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt ValidationSchemasTable.Arn
+                  - !GetAtt AuditTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GeneratePresignedUrl
+                Resource:
+                  - !Sub '${ExchangeBucket}/*'
+                  - !Sub '${TemplatesBucket}/*'
+              - Effect: Allow
+                Action:
+                  - execute-api:ManageConnections
+                Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*'
+
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-*'
+
+  # Systems Manager Parameters
+  MaxFileSizeParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/config/max-file-size-mb'
+      Type: String
+      Value: !Ref MaxFileSizeMB
+      Description: 'Maximum file size in MB'
+
+  ValidationTimeoutParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${ProjectName}/config/validation-timeout-seconds'
+      Type: String
+      Value: '30'
+      Description: 'Validation timeout in seconds'
+
+Outputs:
+  WebSocketEndpoint:
+    Description: 'WebSocket API endpoint for real-time updates'
+    Value: !Sub 'wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-WebSocketEndpoint'
+
+  ValidationStateMachineArn:
+    Description: 'Step Functions State Machine ARN'
+    Value: !Ref ValidationStateMachine
+    Export:
+      Name: !Sub '${AWS::StackName}-StateMachine'
+
+  ExchangeBucketName:
+    Description: 'S3 Exchange Bucket Name'
+    Value: !Ref ExchangeBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ExchangeBucket'
+
+  CloudFrontDomainName:
+    Description: 'CloudFront Distribution Domain Name'
+    Value: !GetAtt CloudFrontDistribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFrontDomain'

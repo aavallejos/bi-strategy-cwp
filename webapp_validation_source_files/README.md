@@ -137,4 +137,4 @@ amplify publish
 
 ---
 
-**Contacto**: Para más información sobre la implementación de esta solución, contactar a Strata Analytics - Cloud Solutions Team del equipo de BI Strategy CWP.
+**Contacto**: Para más información sobre la implementación de esta solución, contactar a Strata Analytics - Cloud Solutions Team del equipo de BI Strategy CWP. - Timestamp: 2024-12-19 15:30:00
